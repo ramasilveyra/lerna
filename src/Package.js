@@ -2,14 +2,23 @@ import dedent from "dedent";
 import log from "npmlog";
 import path from "path";
 import semver from "semver";
+import hostedGitInfo from "hosted-git-info";
 
 import dependencyIsSatisfied from "./utils/dependencyIsSatisfied";
+import getGitDependencySemver from "./utils/getGitDependencySemver";
 import NpmUtilities from "./NpmUtilities";
 
 export default class Package {
   constructor(pkg, location) {
     this._package = pkg;
     this._location = location;
+    this._addGitDepsSemver = true;
+
+    if (this._addGitDepsSemver) {
+      this._package.dependencies = this.addGitDepsSemver(this._package.dependencies);
+      this._package.devDependencies = this.addGitDepsSemver(this._package.devDependencies);
+      this._package.peerDependencies = this.addGitDepsSemver(this._package.peerDependencies);
+    }
   }
 
   get name() {
@@ -81,6 +90,28 @@ export default class Package {
     } else {
       callback();
     }
+  }
+
+  addGitDepsSemver(dependencies) {
+    if (!dependencies) {
+      return dependencies;
+    }
+
+    const dependenciesWithGitDepsSemver = Object.assign({}, dependencies);
+    Object.keys(dependencies).forEach((depName) => {
+      const originalVersion = dependencies[depName];
+      const isGitUrl = hostedGitInfo.fromUrl(originalVersion);
+
+      if (!isGitUrl) {
+        return null;
+      }
+
+      dependenciesWithGitDepsSemver[depName] = getGitDependencySemver(
+        this.nodeModulesLocation, depName, originalVersion
+      );
+    });
+
+    return dependenciesWithGitDepsSemver;
   }
 
   /**
